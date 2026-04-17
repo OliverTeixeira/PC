@@ -262,7 +262,8 @@ game_loop(GameState) ->
         tick ->
             io:format("GameRoom (~p): Tick! Calculando movimentos e colisões...~n", [self()]),
 
-            %aqui mais p frente vamos recalcular as posiçoes dos jogadores e enviar p os clientes java
+            %no tick, enviamos as coordenadas atuais p os jogadores do mapa.
+            %enviar_atualizacoes(maps:to_list(GameState)),
 
             %o coraçao tem q continuar batendo: agendamos o proximo "tick"
             erlang:send_after(2000, self(), tick),
@@ -273,13 +274,46 @@ game_loop(GameState) ->
         {movimento, Username, Tecla} ->
             io:format("GameRoom: Recebeu comando de movimento de ~p: ~p!~n", [ Username, Tecla]),
 
-            %aqui no futuro vamos calcular o angul e a velocidade do GameState
+            %a fisica: atualiza as coordenadas e gera um novo GameState
+            NovoGameState = atualizar_posicao(Username, Tecla, GameState),
 
-            game_loop(GameState);
+            %so envia a mensagem quando alguem se mexe
+            enviar_atualizacoes(maps:to_list(NovoGameState)),
+
+            game_loop(NovoGameState);
 
         _ -> game_loop(GameState)
     end.
 
+
+
+%funçoes de mat e atualizacao
+atualizar_posicao(Username, Tecla, MapaState) ->
+    case maps:find(Username, MapaState) of
+        {ok, {X, Y, Raio, Sock}} ->
+            %calcula os novos X e Y de acordo com a tecla
+            {NovoX, NovoY} = calcular_movimento(X, Y, Tecla),
+
+            %atualiza o estado do jogador no mapa
+            maps:put(Username, {NovoX, NovoY, Raio, Sock}, MapaState);
+        error ->
+            io:format("GameRoom: Tentativa de mover ~p, mas ele não está no estado do jogo.~n", [Username]),
+            MapaState
+    end.
+
+%a fisica do jogo por enquanto (andar 10 pixels por comando)
+calcular_movimento(X, Y, "Cima") -> {X, Y - 10};
+calcular_movimento(X, Y, "Baixo") -> {X, Y + 10};
+calcular_movimento(X, Y, "Esquerda") -> {X - 10, Y};
+calcular_movimento(X, Y, "Direita") -> {X + 10, Y};
+calcular_movimento(X, Y, _TeclaDesconecida) -> {X, Y}.
+
+%funçao q envia a posiçao nova para o ecra do java
+enviar_atualizacoes([]) -> ok;
+enviar_atualizacoes([{Username, {X, Y, Raio, Sock}} | Resto]) ->
+    Mensagem = lists:flatten(io_lib:format("~s andou para X=~p, Y=~p~n", [Username, X, Y])),
+    gen_tcp:send(Sock, list_to_binary(Mensagem)),
+    enviar_atualizacoes(Resto).
 
 %funçao auxliar q guarda o GamePid de cada jogador no ActiveGamesMap
 registar_jogadores([], _GamePid, Mapa) -> Mapa;

@@ -4,40 +4,38 @@ import java.util.Scanner;
 
 public class Cliente {
     public static void main(String[] args) {
-        try{
-            //liga a porta 8080 no proprio pc
-            Socket socket = new Socket("localhost", 8080);
-            //ferramentas para ler e p escrever
-            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        String host = "127.0.0.1";
+        int porta = 8080;
 
-            //scanner p ler oq escrevemos no teclado
-            Scanner scanner = new Scanner(System.in);
+        try (Socket socket = new Socket(host, porta);
+             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+             Scanner teclado = new Scanner(System.in)) {
 
-            System.out.println("Ligado ao servidor! Escreve comandos (ex: FRENTE, ESQUERDA). Escreve 'sair' p fechar");
+            System.out.println("--- Conectado ao Servidor Erlang ---");
+            System.out.println("Podes comecar a escrever (ex: register#p1#123)");
 
-            //ciclo continuo
-            while(true){
-                String comando = scanner.nextLine(); //le do meu teclado
-
-                if(comando.equalsIgnoreCase("sair")){
-                    break;
+            // A MAGIA: Uma Thread dedicada só para ouvir o Erlang em tempo real!
+            Thread ouvinte = new Thread(() -> {
+                try {
+                    String mensagemDoServidor;
+                    while ((mensagemDoServidor = in.readLine()) != null) {
+                        System.out.println(">> " + mensagemDoServidor);
+                    }
+                } catch (IOException e) {
+                    System.out.println("Conexao com o servidor perdida.");
                 }
+            });
+            ouvinte.start();
 
-                out.println(comando); //envia p o erlang
-
-                String resposta = in.readLine(); //le a resposta do erlang
-                System.out.println("Resposta: " + resposta);
+            // O ciclo principal fica apenas focado em ler o teu teclado
+            while (true) {
+                String comando = teclado.nextLine();
+                out.println(comando); 
             }
 
-            //limpeza quando fechas
-            socket.close();
-            scanner.close();
-            System.out.println("Desligado.");
-
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println("Erro ao conectar: Verifica se o Erlang esta a correr!");
         }
     }
-    
 }
